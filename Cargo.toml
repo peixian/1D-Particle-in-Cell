@@ -1,0 +1,6 @@
+[package]
+name = "particle_in_cell"
+version = "0.1.0"
+authors = ["Peixian Wang <peixian@plains.guru>"]
+
+[dependencies]
