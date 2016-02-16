@@ -1,0 +1,11 @@
+# [package]
+#
+# name="Particle in Cell"
+# version="0.0.1"
+# authors= ["Peixian Wang peixian@driftingicebergs.com"]
+# build="pic.rs"
+[package]
+
+name = "hello_world"
+version = "0.0.1"
+authors = [ "Your name <you@example.com>" ]
