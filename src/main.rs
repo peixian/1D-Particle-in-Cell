@@ -33,10 +33,10 @@ fn main() {
 	
 	//peturb the x positions
 	perturb(&mut x_position, k);
-
+	let mut rho: Vec<f64> = vec![0.0; np as usize]; //mesh densities!
 	let mut phi: Vec<f64> = vec![0.0; NG as usize]; //vector of phi's to solve for the poisson 
 	let mut electric_mesh: Vec<f64> = vec![0.0; NG as usize]; //vector of electric field from potential
-	let mut rho: Vec<f64> = vec![0.0; NG as usize]; //mesh densities!
+
 }
 
 //evaluates the electron number density using CIC weight.
@@ -67,26 +67,60 @@ fn cic_weight(x: f64, np: i32) -> f64{
 
 
 //solves the 1D poisson equation
-fn poisson1d(phi: &mut Vec<f64>, electric_mesh: &Vec<f64>) {
+fn poisson1d(phi: &mut Vec<f64>, rho: &Vec<f64>) {
 	for i in 0..NG {
 		phi.push(0.0);
 	}
+	let dx_g: f64 = LENGTH as f64/NG as f64;
 	let error_tolerance: f64 = 0.000001; //10^-6 
-	let source_l2_norm = l2_norm();
-	// let source_l2_norm: f64 = na::norm(rho);
+	let source = source_l2_norm(&rho, dx_g);
+	let residual = residual_l2_norm(&rho, &phi, dx_g);
 }
 
-//calculates the L2Norm for a vector
+//calculates the L2Norm for the source
 //probably don't want to call this outside of the poisson solver?
-fn l2_norm() -> f64 {
-	return 0.0
+fn source_l2_norm(rho: &Vec<f64>, dx_g: f64) -> f64 {
+	let mut source: f64 = 0.0;
+	//sum the entire array
+	for i in 0..rho.len() {
+		source += rho[i as usize].powi(2);
+	}
+	//divide it by 1/Ng
+	source /= dx_g;
+	//then square root it
+	source = source.sqrt();
+	return source;
+}
+
+//calculates the L2Norm for the residual
+fn residual_l2_norm(rho: &Vec<f64>, phi: &Vec<f64>, dx_g: f64) -> f64 {
+	let mut residual: f64 = 0.0;
+	
+	for i in 0..rho.len() {
+		residual += rho[i as usize];
+		if i == 0 {
+			residual += phi[i+1 as usize] - 2.0*phi[i as usize] + phi[(rho.len()-1) as usize];
+		}
+		else if i+1 == LENGTH as usize {
+			residual += phi[0] - 2.0*phi[i as usize] + phi[(i-1) as usize];
+		}
+		else {
+			residual += phi[(i+1 as usize)] - 2.0*phi[i as usize] + phi[(i-1) as usize];
+			residual /= (LENGTH as f64/NG as f64).powi(2);
+			residual = residual.sqrt();
+		}
+		
+	}
+	residual /= dx_g;
+	residual = residual.sqrt();
+	return residual;
 }
 
 
 //calculates the electric field from potential, where
 //E is the potential
 //uses the second order finite difference
-fn electric_field(phi: &mut Vec<f64>, electric_mesh: & mut Vec<f64>) {
+fn electric_field (phi: &mut Vec<f64>, electric_mesh: & mut Vec<f64>) {
 	//get dx_g
 	let dx: f64 = LENGTH/(NG as f64);
 	//set the iteration length for easier reference
@@ -104,9 +138,9 @@ fn electric_field(phi: &mut Vec<f64>, electric_mesh: & mut Vec<f64>) {
 
 
 //gets called whenever a timestep is taken, extrapolates x and v for a particle for a single timestep
-fn leapfrog(x_position: &mut Vec<f64>, velocity: &mut Vec<f64>, dt: f64) {
+fn leapfrog(electric_mesh: &Vec<f64>, x_position: &mut Vec<f64>, velocity: &mut Vec<f64>, dt: f64, delta_x: f64) {
 	for i in 0..x_position.len() {
-		let (x_new, v_new) = leap(x_position[i as usize], velocity[i as usize], dt);
+		let (x_new, v_new) = leap(x_position[i as usize], delta_x, velocity[i as usize], dt, electric_mesh);
 		x_position[i as usize] = x_new;
 		velocity[i as usize] = v_new;
 	}
@@ -115,19 +149,29 @@ fn leapfrog(x_position: &mut Vec<f64>, velocity: &mut Vec<f64>, dt: f64) {
 //calculates the drift/kick/drift for a specific value
 //returns the new X and new V
 //THIS SHOULD *ONLY* BE CALLED FROM THE LEAPFROG METHOD
-fn leap(x: f64, v: f64, dt: f64) -> (f64, f64) {
+fn leap(x: f64, delta_x: f64, v: f64, dt: f64, electric_mesh: &Vec<f64>) -> (f64, f64) {
+	let j: i32 = (x/delta_x).floor() as i32;
+	let y: f64 = x/delta_x - j as f64;
 	//drift
 	let x_half: f64 = x + 0.5*v*dt;
 	//kick
-	let v_new: f64 = v + accel(x_half)*dt;
+	let v_new: f64 = v + accel(j, y, x_half, electric_mesh)*dt;
 	//drift
 	let x_new: f64 = x_half + 0.5*v_new*dt;
 	return (x_new, v_new)
 }
 
 //calculates the accleration
-fn accel(x_value: f64) -> f64{
-	return 0.0;
+fn accel(j: i32, y: f64, x_value: f64, electric_mesh: &Vec<f64>) -> f64{
+	let mut dphi_dx: f64 = 0.0;
+	if j+1 == NG {
+		dphi_dx = electric_mesh[j as usize]*(1.0-y) + electric_mesh[0]*y;
+	}
+	else {
+		dphi_dx = electric_mesh[j as usize]*(1.0-y) + electric_mesh[(j+1) as usize]*y;
+	}
+	let a: f64 = -CHARGE as f64/MASS as f64*dphi_dx;
+	return a;
 }
 
 
@@ -141,7 +185,7 @@ fn perturb(x_position: &mut Vec<f64>, k: i32) {
 }
 
 //prints the list of X positions. THIS IS A COPY, NOT A DIRECT REFERENCE
-fn printVec(vector: &Vec<f64>) {
+fn print_vec(vector: &Vec<f64>) {
 	for i in 0..vector.len() {
 		println!("{}", vector[i as usize])
 	}

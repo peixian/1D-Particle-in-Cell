@@ -7,8 +7,8 @@ Particle in cell simulation with poisson solver written in [rust][rust-lang]. Th
 3. https://www.gnu.org/software/archimedes/manual/html/node29.html
 
 ## TODO:
-- [ ] - Implement Accleration Function
-- [ ] - Implement L2Norm Function
+- [x] - Implement Accleration Function
+- [x] - Implement L2Norm Function
 - [ ] - Implement Poisson Function
 - [ ] - Implement Evolution 
 - [ ] - Implement writing to file
