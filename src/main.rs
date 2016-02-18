@@ -33,10 +33,9 @@ fn main() {
 	
 	//peturb the x positions
 	perturb(&mut x_position, k);
-	let mut rho: Vec<f64> = vec![0.0; np as usize]; //mesh densities!
+	let mut rho: Vec<f64> = vec![0.0; NG as usize]; //mesh densities
 	let mut phi: Vec<f64> = vec![0.0; NG as usize]; //vector of phi's to solve for the poisson 
 	let mut electric_mesh: Vec<f64> = vec![0.0; NG as usize]; //vector of electric field from potential
-
 }
 
 //evaluates the electron number density using CIC weight.
@@ -66,7 +65,7 @@ fn cic_weight(x: f64, np: i32) -> f64{
 }
 
 
-//solves the 1D poisson equation
+//solves the 1D poisson equation using the Gauss-Seidel relaxation
 fn poisson1d(phi: &mut Vec<f64>, rho: &Vec<f64>) {
 	for i in 0..NG {
 		phi.push(0.0);
@@ -74,7 +73,16 @@ fn poisson1d(phi: &mut Vec<f64>, rho: &Vec<f64>) {
 	let dx_g: f64 = LENGTH as f64/NG as f64;
 	let error_tolerance: f64 = 0.000001; //10^-6 
 	let source = source_l2_norm(&rho, dx_g);
-	let residual = residual_l2_norm(&rho, &phi, dx_g);
+	let mut residual = residual_l2_norm(&rho, &phi, dx_g);
+	while residual > error_tolerance*source {
+		for i in 0..NG-1 {
+			// rust uses C-like functions, so % isn't mod, but rather remainder
+			let im: i32 = ((i - 1 + NG) % NG) + NG;
+			let ip: i32 = ((i + 1) % NG) + NG;
+			phi[i as usize] = 0.5*(phi[im as usize] + phi[ip as usize]) + dx_g.powi(2)/2.0*rho[i as usize];
+		}
+		residual = residual_l2_norm(&rho, &phi, dx_g);
+	}
 }
 
 //calculates the L2Norm for the source
