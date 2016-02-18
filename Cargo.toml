@@ -4,4 +4,3 @@ version = "0.1.0"
 authors = ["Peixian Wang <peixian@driftingicebergs.com>"]
 
 [dependencies]
-nalgebra = {git = "https://github.com/sebcrozet/nalgebra.git"}
