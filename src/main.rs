@@ -1,8 +1,3 @@
-#![allow(unused_variables)]
-
-
-extern crate nalgebra as na;
-use na::*;
 use std::f64::consts;
 use std::vec::Vec;
 
