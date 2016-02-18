@@ -71,7 +71,7 @@ fn poisson1d(phi: &mut Vec<f64>, electric_mesh: &Vec<f64>) {
 	for i in 0..NG {
 		phi.push(0.0);
 	}
-	let error_tolerance: f64 = 0.000001;
+	let error_tolerance: f64 = 0.000001; //10^-6 
 	let source_l2_norm = l2_norm();
 	// let source_l2_norm: f64 = na::norm(rho);
 }
