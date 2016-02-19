@@ -105,18 +105,19 @@ fn poisson1d<'a>(phi: &'a mut Vec<f64>, rho: &Vec<f64>) {
 	// println!("R: {}, eS: {}", residual, error_tolerance*source);
 	while residual > error_tolerance*source {
 		// println!("R: {}, eS: {}", residual, error_tolerance*source);
+		//print_vec(&phi);
 		for i in 0..NG-1 {
-			// rust uses C-like functions, so % is remainder (don't go negative!)
-			
+			// rust uses C-like functions, so % is remainder (don't go negative!)	
 			let im: i32 = ((i - 1 + NG) % NG);
 			let ip: i32 = ((i + 1) % NG);
 			
-			println!("Old Phi: {}", phi[i as usize]);
+			//println!("Old Phi: {}", phi[i as usize]);
 			//println!("New Phi: {}", 0.5*(phi[im as usize] + phi[ip as usize]) + dx_g.powi(2)/2.0*rho[i as usize]);
 			// println!("i: {}, ng: {}, im: {}, ip: {}", i, NG, im, ip);
 			phi[i as usize] = 0.5*(phi[im as usize] + phi[ip as usize]) + dx_g.powi(2)/2.0*rho[i as usize];
-			println!("New Phi: {}", phi[i as usize]);
+			//println!("New Phi: {}", phi[i as usize]);
 		}
+		//print_vec(&phi);
 		residual = residual_l2_norm(&rho, &phi, dx_g);
 	}
 }
