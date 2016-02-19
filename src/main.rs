@@ -2,7 +2,6 @@ use std::f64::consts;
 use std::vec::Vec;
 use std::fs::File;
 use std::path::Path;
-use std::error::Error;
 use std::io::{Read, Write};
 
 const LENGTH: f64 = 2.0*consts::PI; //length of PIC box
@@ -71,7 +70,7 @@ fn density(rho: &mut Vec<f64>, x_position: & Vec<f64>, np: i32) {
 	for rho_i in 0..rho.len() {
 		let mut sum: f64 = 0.0;
 		for x_p in 0..np*2 {
-			sum += (MASS as f64)*cic_weight(rho_i as f64 - x_position[x_p as usize], np);
+			sum += (MASS as f64)*cic_weight(rho[rho_i as usize] - x_position[x_p as usize], np);
 		}
 		// println!("rho_i is {}", rho_i);
 		rho[rho_i as usize] = 1.0/(LENGTH/NG as f64)*sum;
@@ -106,6 +105,7 @@ fn poisson1d<'a>(phi: &'a mut Vec<f64>, rho: &Vec<f64>) {
 	while residual > error_tolerance*source {
 		// println!("R: {}, eS: {}", residual, error_tolerance*source);
 		//print_vec(&phi);
+		println!("Before new phi R: {}", residual);
 		for i in 0..NG-1 {
 			// rust uses C-like functions, so % is remainder (don't go negative!)	
 			let im: i32 = ((i - 1 + NG) % NG);
@@ -119,6 +119,7 @@ fn poisson1d<'a>(phi: &'a mut Vec<f64>, rho: &Vec<f64>) {
 		}
 		//print_vec(&phi);
 		residual = residual_l2_norm(&rho, &phi, dx_g);
+		println!("After new phi R: {}", residual);
 	}
 }
 
@@ -131,7 +132,7 @@ fn source_l2_norm(rho: &Vec<f64>, dx_g: f64) -> f64 {
 		source += rho[i as usize].powi(2);
 	}
 	//divide it by 1/Ng
-	source /= dx_g;
+	source /= NG as f64;
 	//then square root it
 	source = source.sqrt();
 	return source;
@@ -152,7 +153,7 @@ fn residual_l2_norm(rho: &Vec<f64>, phi: &Vec<f64>, dx_g: f64) -> f64 {
 			residual += (phi[(i+1 as usize)] - 2.0*phi[i as usize] + phi[(i-1) as usize])/dx_g.powi(2);
 		}
 	}
-	residual /= dx_g;
+	residual /= NG as f64;
 	residual = residual.sqrt();
 	
 	return residual;
@@ -200,14 +201,14 @@ fn leap(x: f64, delta_x: f64, v: f64, dt: f64, electric_mesh: &Vec<f64>) -> (f64
 	//drift
 	let x_half: f64 = x + 0.5*v*dt;
 	//kick
-	let v_new: f64 = v + accel(j, y, x_half, electric_mesh)*dt;
+	let v_new: f64 = v + accel(j, y, electric_mesh)*dt;
 	//drift
 	let x_new: f64 = x_half + 0.5*v_new*dt;
 	return (x_new, v_new)
 }
 
 //calculates the accleration
-fn accel(j: i32, y: f64, x_value: f64, electric_mesh: &Vec<f64>) -> f64{
+fn accel(j: i32, y: f64, electric_mesh: &Vec<f64>) -> f64{
 	let mut dphi_dx: f64 = 0.0;
 	if j+1 == NG {
 		dphi_dx = electric_mesh[j as usize]*(1.0-y) + electric_mesh[0]*y;
@@ -225,7 +226,7 @@ fn perturb(x_position: &mut Vec<f64>, k: i32) {
 	let wavelength: f64 = LENGTH/(k as f64);
 	let amplitude: f64 = 0.01 * LENGTH;
 	for i in 0..x_position.len() {
-		x_position[i as usize] = x_position[i as usize] + amplitude*(wavelength*x_position[i as usize]*2.0*consts::PI).sin();
+		x_position[i as usize] = x_position[i as usize] + amplitude*(wavelength*x_position[i as usize]).sin();
 	}
 }
 
