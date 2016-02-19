@@ -1,5 +1,9 @@
 use std::f64::consts;
 use std::vec::Vec;
+use std::fs::File;
+use std::path::Path;
+use std::error::Error;
+use std::io::{Read, Write};
 
 const LENGTH: f64 = 2.0*consts::PI; //length of PIC box
 const NG: i32 = 64; //number of zones for mesh
@@ -27,18 +31,41 @@ fn main() {
 			x_position.push((i-np) as f64*LENGTH/np as f64);
 			velocity.push(V_STREAM);
 		}
-		//rust only accepts usize for indexes
-		println!("x: {}, v: {}", x_position[i as usize], velocity[i as usize]);
+		//rust only accepts usize for indexes, sanity check
+		// println!("x: {}, v: {}", x_position[i as usize], velocity[i as usize]);
 	}
 	
 	//peturb the x positions
 	perturb(&mut x_position, k);
+	
 	let mut rho: Vec<f64> = vec![0.0; NG as usize]; //mesh densities
 	let mut phi: Vec<f64> = vec![0.0; NG as usize]; //vector of phi's to solve for the poisson 
 	let mut electric_mesh: Vec<f64> = vec![0.0; NG as usize]; //vector of electric field from potential
+	
+	let solnSize = np*2;
+	let mut solution: Vec<f64> = vec![0.0; solnSize as usize];
+	catch(&x_position, &velocity, &mut solution, np);
+	let timestep = (t_max/delta_x).ceil() as u32;
+	
+	for k in 0..timestep {
+		//unload from the solution
+		release(&mut x_position, &mut velocity, &solution, np);
+		write_out(&x_position, &velocity, &rho, k);
+		//find the particle number density
+		density(&mut rho, &mut x_position, np);
+		//solve the poisson equation
+		poisson1d(&mut phi, &mut rho);
+		//find the mesh
+		electric_field(&mut phi, &mut electric_mesh);
+		for i in 0..x_position.len() {
+			let idx = i as usize;
+			
+		}
+		
+	}	
 }
 
-//evaluates the electron number density using CIC weight.
+//evaluates the particle number density using CIC weight.
 //Each mesh loops through all the particles to add in their contribution, calculates the electron density for that mesh block alone.
 fn density(rho: &mut Vec<f64>, x_position: & Vec<f64>, np: i32) {
 	for rho_i in 0..rho.len() {
@@ -46,11 +73,15 @@ fn density(rho: &mut Vec<f64>, x_position: & Vec<f64>, np: i32) {
 		for x_p in 0..np*2 {
 			sum += (MASS as f64)*cic_weight(rho_i as f64 - x_position[x_p as usize], np);
 		}
+		// println!("rho_i is {}", rho_i);
 		rho[rho_i as usize] = 1.0/(LENGTH/NG as f64)*sum;
 	}
 }
 
 //Cloud in Cell weighting
+//			  { 1 + x/deltaX for -deltaX < x
+// W_cic(X) = | 1 - x/deltaX for x < deltaX
+//			  } 0 otherwise
 fn cic_weight(x: f64, np: i32) -> f64{
 	let delta_x: f64 = LENGTH/(np as f64);
 	if x > -delta_x {
@@ -66,20 +97,25 @@ fn cic_weight(x: f64, np: i32) -> f64{
 
 
 //solves the 1D poisson equation using the Gauss-Seidel relaxation
-fn poisson1d(phi: &mut Vec<f64>, rho: &Vec<f64>) {
-	for i in 0..NG {
-		phi.push(0.0);
-	}
+fn poisson1d<'a>(phi: &'a mut Vec<f64>, rho: &Vec<f64>) {
 	let dx_g: f64 = LENGTH as f64/NG as f64;
 	let error_tolerance: f64 = 0.000001; //10^-6 
 	let source = source_l2_norm(&rho, dx_g);
 	let mut residual = residual_l2_norm(&rho, &phi, dx_g);
+	// println!("R: {}, eS: {}", residual, error_tolerance*source);
 	while residual > error_tolerance*source {
+		// println!("R: {}, eS: {}", residual, error_tolerance*source);
 		for i in 0..NG-1 {
-			// rust uses C-like functions, so % isn't mod, but rather remainder
-			let im: i32 = ((i - 1 + NG) % NG) + NG;
-			let ip: i32 = ((i + 1) % NG) + NG;
+			// rust uses C-like functions, so % is remainder (don't go negative!)
+			
+			let im: i32 = ((i - 1 + NG) % NG);
+			let ip: i32 = ((i + 1) % NG);
+			
+			println!("Old Phi: {}", phi[i as usize]);
+			//println!("New Phi: {}", 0.5*(phi[im as usize] + phi[ip as usize]) + dx_g.powi(2)/2.0*rho[i as usize]);
+			// println!("i: {}, ng: {}, im: {}, ip: {}", i, NG, im, ip);
 			phi[i as usize] = 0.5*(phi[im as usize] + phi[ip as usize]) + dx_g.powi(2)/2.0*rho[i as usize];
+			println!("New Phi: {}", phi[i as usize]);
 		}
 		residual = residual_l2_norm(&rho, &phi, dx_g);
 	}
@@ -103,24 +139,21 @@ fn source_l2_norm(rho: &Vec<f64>, dx_g: f64) -> f64 {
 //calculates the L2Norm for the residual
 fn residual_l2_norm(rho: &Vec<f64>, phi: &Vec<f64>, dx_g: f64) -> f64 {
 	let mut residual: f64 = 0.0;
-	
 	for i in 0..rho.len() {
 		residual += rho[i as usize];
 		if i == 0 {
-			residual += phi[i+1 as usize] - 2.0*phi[i as usize] + phi[(rho.len()-1) as usize];
+			residual += (phi[i+1 as usize] - 2.0*phi[i as usize] + phi[(rho.len()-1) as usize])/dx_g.powi(2);
 		}
-		else if i+1 == LENGTH as usize {
-			residual += phi[0] - 2.0*phi[i as usize] + phi[(i-1) as usize];
+		else if i+1 == rho.len() as usize {
+			residual += (phi[0] - 2.0*phi[i as usize] + phi[(i-1) as usize])/dx_g.powi(2);
 		}
 		else {
-			residual += phi[(i+1 as usize)] - 2.0*phi[i as usize] + phi[(i-1) as usize];
-			residual /= (LENGTH as f64/NG as f64).powi(2);
-			residual = residual.sqrt();
+			residual += (phi[(i+1 as usize)] - 2.0*phi[i as usize] + phi[(i-1) as usize])/dx_g.powi(2);
 		}
-		
 	}
 	residual /= dx_g;
 	residual = residual.sqrt();
+	
 	return residual;
 }
 
@@ -133,7 +166,10 @@ fn electric_field (phi: &mut Vec<f64>, electric_mesh: & mut Vec<f64>) {
 	let dx: f64 = LENGTH/(NG as f64);
 	//set the iteration length for easier reference
 	let iter_length = phi.len();
+	println!("Phi Length: {}", phi.len());
+	println!("Electric Mesh Length: {}", electric_mesh.len());
 	for i in 1..iter_length-1 {
+		// println!("Hit {}", i);
 		//finite difference
 		let phi_next = phi[i+1 as usize];
 		let phi_prev = phi[i-1 as usize];
@@ -192,9 +228,43 @@ fn perturb(x_position: &mut Vec<f64>, k: i32) {
 	}
 }
 
+// catches particles into a temp array
+fn catch(x_position: &Vec<f64>, velocity: &Vec<f64>, solution: &mut Vec<f64>, np: i32) {
+	for i in 0..np {
+		let pos = i as usize;
+		solution[pos] = x_position[pos];
+		solution[pos + np as usize] = velocity[pos];
+	}
+}
+
+//dumps the temp array back into the particle vectors
+fn release(x_position: &mut Vec<f64>, velocity: &mut Vec<f64>, solution: &Vec<f64>, np: i32) {
+	for i in 0..np {
+		let pos = i as usize;
+		x_position[pos] = solution[pos];
+		velocity[pos] = solution[pos + np as usize];
+	}
+}
+
 //prints the list of X positions. THIS IS A COPY, NOT A DIRECT REFERENCE
 fn print_vec(vector: &Vec<f64>) {
 	for i in 0..vector.len() {
-		println!("{}", vector[i as usize])
+		println!("Item {}: {}", i, vector[i as usize])
 	}
+}
+
+//writes the output to a file
+fn write_out(x_position: &Vec<f64>, velocity: &Vec<f64>, rho: &Vec<f64>, timestep: u32) {
+	let path = format!("{}-pvv", timestep);
+	let pos_vs_velocity = Path::new(&path);
+	//let pos_vs_rho = Path::new(format!("out/{}-pvr", timestep));
+	let mut outStr = "x,v \n".to_owned();
+	for i in 0..x_position.len() {
+		let idx = i as usize;
+		let tmp = (format!("{}, {}\n", x_position[idx], velocity[idx])).to_owned();
+		outStr.push_str(&tmp);
+	}
+	println!("{}", path);
+	let mut f = File::create(&pos_vs_velocity).unwrap();
+	f.write_all(&outStr.as_bytes());
 }
