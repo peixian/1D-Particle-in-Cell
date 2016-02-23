@@ -175,18 +175,18 @@ fn electric_field (phi: &mut Vec<f64>, electric_mesh: & mut Vec<f64>) {
 		//finite difference
 		let phi_next = phi[i+1 as usize];
 		let phi_prev = phi[i-1 as usize];
-		electric_mesh[i] = (phi_next - 2.0*phi[i as usize] + phi_prev)/(dx.powi(2));
+		electric_mesh[i] = (phi_next - phi_prev)(2.0*dx)
 	}
 	//particles at the edge need to wrap around, so wrap them around
-	electric_mesh[0] = (phi[1] - 2.0*phi[0] + phi[iter_length-1])/(dx.powi(2));
-	electric_mesh[iter_length-1] = (phi[0] - 2.0*phi[iter_length-1] + phi[iter_length-2])/(dx.powi(2));
+	electric_mesh[0] = (phi[1] - phi[iter_length-1])/(2.0*dx);
+	electric_mesh[iter_length-1] = (phi[0] - phi[iter_length-2])/(2.0*dx);
 }
 
 
 //gets called whenever a timestep is taken, extrapolates x and v for a particle for a single timestep
-fn leapfrog(electric_mesh: &Vec<f64>, x_position: &mut Vec<f64>, velocity: &mut Vec<f64>, dt: f64, delta_x: f64) {
+fn leapfrog(electric_mesh: &Vec<f64>, x_position: &mut Vec<f64>, velocity: &mut Vec<f64>, dt: f64, delta_x: f64, k:i32) {
 	for i in 0..x_position.len() {
-		let (x_new, v_new) = leap(x_position[i as usize], delta_x, velocity[i as usize], dt, electric_mesh);
+		let (x_new, v_new) = leap(x_position[i as usize], delta_x, velocity[i as usize], dt, k, electric_mesh);
 		x_position[i as usize] = x_new;
 		velocity[i as usize] = v_new;
 	}
@@ -195,27 +195,22 @@ fn leapfrog(electric_mesh: &Vec<f64>, x_position: &mut Vec<f64>, velocity: &mut 
 //calculates the drift/kick/drift for a specific value
 //returns the new X and new V
 //THIS SHOULD *ONLY* BE CALLED FROM THE LEAPFROG METHOD
-fn leap(x: f64, delta_x: f64, v: f64, dt: f64, electric_mesh: &Vec<f64>) -> (f64, f64) {
+fn leap(x: f64, delta_x: f64, v: f64, dt: f64, k: i32, electric_mesh: &Vec<f64>) -> (f64, f64) {
 	let j: i32 = (x/delta_x).floor() as i32;
 	let y: f64 = x/delta_x - j as f64;
 	//drift
 	let x_half: f64 = x + 0.5*v*dt;
 	//kick
-	let v_new: f64 = v + accel(j, y, electric_mesh)*dt;
+	let v_new: f64 = v + accel(j, k, electric_mesh)*dt;
 	//drift
 	let x_new: f64 = x_half + 0.5*v_new*dt;
 	return (x_new, v_new)
 }
 
 //calculates the accleration
-fn accel(j: i32, y: f64, electric_mesh: &Vec<f64>) -> f64{
+fn accel(j: i32, k: f64, electric_mesh: &Vec<f64>) -> f64{
 	let mut dphi_dx: f64 = 0.0;
-	if j+1 == NG {
-		dphi_dx = electric_mesh[j as usize]*(1.0-y) + electric_mesh[0]*y;
-	}
-	else {
-		dphi_dx = electric_mesh[j as usize]*(1.0-y) + electric_mesh[(j+1) as usize]*y;
-	}
+	dphi_dx = electric_mesh[j]*(k*j as f64).cos()
 	let a: f64 = -CHARGE as f64/MASS as f64*dphi_dx;
 	return a;
 }
