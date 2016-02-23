@@ -9,8 +9,8 @@ Particle in cell simulation with poisson solver written in [rust][rust-lang]. Th
 ## TODO:
 - [x] - Implement Accleration Function
 - [x] - Implement L2Norm Function
-- [ ] - Implement Poisson Function
-- [ ] - Implement Evolution 
-- [ ] - Implement writing to file
+- [x] - Implement Poisson Function
+- [x] - Implement Evolution 
+- [x] - Implement writing to file
 
 [rust-lang]:https://www.rust-lang.org/
