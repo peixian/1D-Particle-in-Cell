@@ -17,8 +17,9 @@ fn main() {
 	let dt: f64 = LENGTH/(NG as f64)/(4.0); //timestep
 	let delta_x: f64 = LENGTH/(np as f64); //L/np, or the delta x of the lattice
 	let t_max: f64 = 16 as f64*consts::PI/((2 as f64*(np as f64)/LENGTH).sqrt()); //maximum time
-	let mut velocity: Vec<f64> = Vec::new(); //velocities of each particle, index is
+	let mut velocity: Vec<f64> = Vec::new(); //velocities of each particle, index is 
 	let mut x_position: Vec<f64> = Vec::new(); //x-position of each particle
+	
 	//seed the initial positions and velocities
 	for i in 0..(np*2) {
 		if i < np {
@@ -32,20 +33,19 @@ fn main() {
 		//rust only accepts usize for indexes, sanity check
 		// println!("x: {}, v: {}", x_position[i as usize], velocity[i as usize]);
 	}
-
+	
 	//peturb the x positions
-	  perturb(&mut x_position, k);
-
+	perturb(&mut x_position, k);
+	
 	let mut rho: Vec<f64> = vec![0.0; NG as usize]; //mesh densities
-	  let mut phi: Vec<f64> = vec![0.0; NG as usize]; //vector of phi's to solve for the poisson
-
-	  let mut electric_mesh: Vec<f64> = vec![0.0; NG as usize]; //vector of electric field from potential
-
+	let mut phi: Vec<f64> = vec![0.0; NG as usize]; //vector of phi's to solve for the poisson 
+	let mut electric_mesh: Vec<f64> = vec![0.0; NG as usize]; //vector of electric field from potential
+	
 	let solnSize = np*2;
 	let mut solution: Vec<f64> = vec![0.0; solnSize as usize];
 	catch(&x_position, &velocity, &mut solution, np);
-	  let timestep = (t_max/delta_x).ceil() as u32;
-
+	let timestep = (t_max/delta_x).ceil() as u32;
+	
 	for k in 0..timestep {
 		//unload from the solution
 		release(&mut x_position, &mut velocity, &solution, np);
@@ -57,10 +57,11 @@ fn main() {
 		//find the mesh
 		electric_field(&mut phi, &mut electric_mesh);
 		for i in 0..x_position.len() {
-			  let idx = i as usize;
+			let idx = i as usize;
+			
 		}
-
-	}
+		
+	}	
 }
 
 //evaluates the particle number density using CIC weight.
@@ -108,7 +109,8 @@ fn poisson1d<'a>(phi: &'a mut Vec<f64>, rho: &Vec<f64>) {
 		for i in 0..NG-1 {
 			// rust uses C-like functions, so % is remainder (don't go negative!)	
 			let im: i32 = ((i - 1 + NG) % NG);
-			let ip: i32 = ((i + 1) % NG);	
+			let ip: i32 = ((i + 1) % NG);
+			
 			//println!("Old Phi: {}", phi[i as usize]);
 			//println!("New Phi: {}", 0.5*(phi[im as usize] + phi[ip as usize]) + dx_g.powi(2)/2.0*rho[i as usize]);
 			// println!("i: {}, ng: {}, im: {}, ip: {}", i, NG, im, ip);
@@ -153,7 +155,7 @@ fn residual_l2_norm(rho: &Vec<f64>, phi: &Vec<f64>, dx_g: f64) -> f64 {
 	}
 	residual /= NG as f64;
 	residual = residual.sqrt();
-	
+    
 	return residual;
 }
 
